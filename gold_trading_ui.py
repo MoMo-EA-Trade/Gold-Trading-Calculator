@@ -4,6 +4,17 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime
 
+# --- Constants & Helper Functions ---
+CURRENCY_SYMBOLS = {
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "CHF": "Fr",
+    "AUD": "A$",
+    "CAD": "C$",
+    "JPY": "¥"
+}
+
 # Configure the page
 st.set_page_config(page_title="Gold Trading Calculator", layout="wide")
 st.title("💰 Gold Trading Calculator")
@@ -98,83 +109,51 @@ st.markdown("---")
 st.sidebar.header("Trading Parameters")
 
 # Input fields
-num_layers = st.sidebar.slider("Number of Layers", min_value=1, max_value=12, value=6, 
-                              help="How many entry levels you will use")
-
-trades_per_layer = st.sidebar.slider("Trades per Layer", min_value=1, max_value=10, value=4,
-                                    help="How many trades you'll execute at each level")
-
-lot_size_per_trade = st.sidebar.number_input("Lot Size per Trade", min_value=0.01, max_value=10.0, 
-                                           value=0.01, step=0.01, 
-                                           help="Size of each trade in lots")
-
-pip_value = st.sidebar.number_input("Pip Value ($ per 0.01 lot)", min_value=0.01, max_value=10.0,
-                                  value=1.0, step=0.1,
-                                  help="Dollar value of 1 pip movement for a 0.01 lot trade")
-
-sl_distance_pips = st.sidebar.number_input("SL Distance from 1st Layer (pips)", 
-                                         min_value=1, max_value=50, value=6,
-                                         help="Distance from your first entry to stop-loss")
-
-distance_first_to_last_layer = st.sidebar.number_input("Distance between 1st-Last Layer (pips)",
-                                                     min_value=0.1, max_value=20.0, value=3.0,
-                                                     help="Price difference between your first and last entry")
-
-account_balance = st.sidebar.number_input("Account Balance", min_value=100, max_value=100000,
-                                        value=1500, step=100)
+num_layers = st.sidebar.slider("Number of Layers", min_value=1, max_value=12, value=6, help="How many entry levels you will use")
+lot_size_per_trade = st.sidebar.number_input("Lot Size per Trade", min_value=0.01, max_value=10.0, value=0.01, step=0.01, help="Size of each trade in lots")
+pip_value = st.sidebar.number_input("Pip Value ($ per 0.01 lot)", min_value=0.1, max_value=10.0, value=0.1, step=0.1, help="Dollar value of 1 pip movement for a 0.01 lot trade")
+sl_distance_pips = st.sidebar.number_input("SL Distance from 1st Layer (pips)", min_value=10, max_value=500, value=60, help="Distance from your first entry to stop-loss")
+distance_first_to_last_layer = st.sidebar.number_input("Distance between 1st-Last Layer (pips)", min_value=10, max_value=50, value=30, help="Price difference between your first and last entry")
+account_balance = st.sidebar.number_input("Account Balance", min_value=100, max_value=100000, value=1000, step=100)
 
 # Margin calculation inputs
 st.sidebar.header("Margin Calculation")
-
-account_currency = st.sidebar.selectbox("Account Currency", 
-                                       ["EUR", "USD", "GBP", "CHF", "AUD", "CAD", "JPY"],
-                                       help="Currency of your trading account")
-
-leverage = st.sidebar.selectbox("Account Leverage", 
-                               ["1:50", "1:100", "1:200", "1:300", "1:400", "1:500", "1:1000", "1:1500", "1:2000"],
-                               index=6,  # Default to 1:500
-                               help="Your broker's leverage ratio")
+account_currency = st.sidebar.selectbox("Account Currency", ["EUR", "USD", "GBP", "CHF", "AUD", "CAD", "JPY"], index=0, help="Currency of your trading account")
+leverage = st.sidebar.selectbox("Account Leverage", ["1:50", "1:100", "1:200", "1:300", "1:400", "1:500", "1:1000", "1:1500", "1:2000"], index=5, help="Your broker's leverage ratio")
 
 # Use live prices with manual override option
-xauusd_price = st.sidebar.number_input("Current XAUUSD Price", 
-                                     min_value=100.0, max_value=10000.0, 
-                                     value=float(live_prices['xauusd']), step=0.1,
-                                     help="Current gold price in USD")
+xauusd_price = st.sidebar.number_input("Current XAUUSD Price", min_value=100.0, max_value=10000.0, value=float(live_prices['xauusd']), step=0.1, help="Current gold price in USD")
 
 # Display current exchange rates and allow manual override if needed
 st.sidebar.header("Current Exchange Rates")
+conversion_rate_usd_to_account = 1.0 # Default to 1 for USD
 if account_currency == "EUR":
-    eurusd_rate = st.sidebar.number_input("EURUSD Rate", 
-                                        min_value=0.5, max_value=2.0, 
-                                        value=float(live_prices['eurusd']), step=0.0001,
-                                        format="%.4f")
+    conversion_rate_usd_to_account = st.sidebar.number_input("EURUSD Rate", min_value=0.5, max_value=2.0, value=float(live_prices['eurusd']), step=0.0001, format="%.4f")
 elif account_currency == "GBP":
-    gbpusd_rate = st.sidebar.number_input("GBPUSD Rate", 
-                                        min_value=0.5, max_value=2.0, 
-                                        value=float(live_prices['gbpusd']), step=0.0001,
-                                        format="%.4f")
+    conversion_rate_usd_to_account = st.sidebar.number_input("GBPUSD Rate", min_value=0.5, max_value=2.0, value=float(live_prices['gbpusd']), step=0.0001, format="%.4f")
 elif account_currency == "AUD":
-    audusd_rate = st.sidebar.number_input("AUDUSD Rate", 
-                                        min_value=0.5, max_value=2.0, 
-                                        value=float(live_prices['audusd']), step=0.0001,
-                                        format="%.4f")
+    conversion_rate_usd_to_account = st.sidebar.number_input("AUDUSD Rate", min_value=0.5, max_value=2.0, value=float(live_prices['audusd']), step=0.0001, format="%.4f")
 elif account_currency == "CAD":
-    usdcad_rate = st.sidebar.number_input("USDCAD Rate", 
-                                        min_value=0.5, max_value=2.0, 
-                                        value=float(live_prices['usdcad']), step=0.0001,
-                                        format="%.4f")
+    conversion_rate_usd_to_account = st.sidebar.number_input("USDCAD Rate", min_value=0.5, max_value=2.0, value=float(live_prices['usdcad']), step=0.0001, format="%.4f")
 elif account_currency == "CHF":
-    usdchf_rate = st.sidebar.number_input("USDCHF Rate", 
-                                        min_value=0.5, max_value=2.0, 
-                                        value=float(live_prices['usdchf']), step=0.0001,
-                                        format="%.4f")
+    conversion_rate_usd_to_account = st.sidebar.number_input("USDCHF Rate", min_value=0.5, max_value=2.0, value=float(live_prices['usdchf']), step=0.0001, format="%.4f")
 elif account_currency == "JPY":
-    usdjpy_rate = st.sidebar.number_input("USDJPY Rate", 
-                                        min_value=50.0, max_value=200.0, 
-                                        value=float(live_prices['usdjpy']), step=0.1,
-                                        format="%.1f")
+    conversion_rate_usd_to_account = st.sidebar.number_input("USDJPY Rate", min_value=50.0, max_value=200.0, value=float(live_prices['usdjpy']), step=0.1, format="%.1f")
 
-# Main calculation logic
+# Sidebar for individual trades per layer
+st.sidebar.markdown("---")
+st.sidebar.subheader("Trades per Layer")
+trades_per_layer_list = []
+
+# Set default values based on the request
+default_trades = [4, 4, 4, 4, 8, 8]
+
+for i in range(num_layers):
+    default_value = default_trades[i] if i < len(default_trades) else 4
+    trades = st.sidebar.slider(f"Layer {i+1} Trades", min_value=1, max_value=10, value=default_value, key=f'trades_l{i+1}', help="Number of trades at this specific layer")
+    trades_per_layer_list.append(trades)
+
+# --- Main Calculation Logic ---
 if num_layers > 1:
     price_gap_pips = distance_first_to_last_layer / (num_layers - 1)
 else:
@@ -184,15 +163,24 @@ else:
 distance_to_sl_per_layer = [sl_distance_pips - (i * price_gap_pips) for i in range(num_layers)]
 
 # Calculate the loss per TRADE at each layer (in $)
-loss_per_trade_per_layer = [distance * pip_value * (lot_size_per_trade / 0.01) for distance in distance_to_sl_per_layer]
+loss_per_trade_per_layer_usd = [distance * pip_value * (lot_size_per_trade / 0.01) for distance in distance_to_sl_per_layer]
 
-# Calculate total loss for the entire position
-total_loss = sum(loss_per_trade_per_layer) * trades_per_layer
+# Calculate total loss for the entire position, using the individual trade counts
+total_loss_usd = sum([loss_per_trade_per_layer_usd[i] * trades_per_layer_list[i] for i in range(num_layers)])
+
+# Convert total loss to account currency
+if account_currency == "EUR" or account_currency == "GBP" or account_currency == "AUD":
+    total_loss = total_loss_usd / conversion_rate_usd_to_account
+elif account_currency == "CAD" or account_currency == "CHF" or account_currency == "JPY":
+    total_loss = total_loss_usd * conversion_rate_usd_to_account
+else: # USD
+    total_loss = total_loss_usd
+
 risk_percentage = (total_loss / account_balance) * 100
 
 # Margin calculation
 leverage_ratio = int(leverage.split(":")[1])  # Extract the number from "1:500"
-total_lots = num_layers * trades_per_layer * lot_size_per_trade
+total_lots = sum([trades * lot_size_per_trade for trades in trades_per_layer_list])
 
 # Standard margin formula: (Contract Size * Price) / Leverage
 # For gold (XAUUSD), contract size is 100 oz per standard lot
@@ -200,54 +188,37 @@ contract_size = 100  # ounces per standard lot
 margin_required_usd = (total_lots * contract_size * xauusd_price) / leverage_ratio
 
 # Convert margin to account currency if needed
-if account_currency == "EUR":
-    margin_required = margin_required_usd / eurusd_rate
-elif account_currency == "GBP":
-    margin_required = margin_required_usd / gbpusd_rate
-elif account_currency == "AUD":
-    margin_required = margin_required_usd / audusd_rate
-elif account_currency == "CAD":
-    margin_required = margin_required_usd * usdcad_rate
-elif account_currency == "CHF":
-    margin_required = margin_required_usd * usdchf_rate
-elif account_currency == "JPY":
-    margin_required = margin_required_usd * usdjpy_rate
-else:  # USD
+if account_currency == "EUR" or account_currency == "GBP" or account_currency == "AUD":
+    margin_required = margin_required_usd / conversion_rate_usd_to_account
+elif account_currency == "CAD" or account_currency == "CHF" or account_currency == "JPY":
+    margin_required = margin_required_usd * conversion_rate_usd_to_account
+else: # USD
     margin_required = margin_required_usd
 
 # Calculate margin usage percentage
 margin_usage_percentage = (margin_required / account_balance) * 100
 
-# Create tabs for different sections
+# Get the correct currency symbol
+currency_symbol = CURRENCY_SYMBOLS.get(account_currency, "$")
+
+# --- Display Results in Tabs ---
 tab1, tab2, tab3 = st.tabs(["📊 Trading Plan", "💰 Margin Analysis", "📈 Visualizations"])
 
 with tab1:
     st.subheader("📊 Trading Plan")
     
-    # Create a table for layer details
-    layer_data = []
-    for i, distance in enumerate(distance_to_sl_per_layer):
-        layer_data.append({
-            'Layer': i+1,
-            'Distance to SL (pips)': f"{distance:.2f}",
-            'Risk per Trade ($)': f"${loss_per_trade_per_layer[i]:.2f}"
-        })
-    
-    st.table(pd.DataFrame(layer_data))
-    
     col1, col2 = st.columns(2)
     
     with col1:
-        st.metric("Total Trades", f"{num_layers * trades_per_layer}")
+        st.metric("Total Trades", f"{sum(trades_per_layer_list)}")
         st.metric("Total Lot Size", f"{total_lots:.2f} lots")
         
     with col2:
-        st.metric("Maximum Loss", f"${total_loss:.2f}")
+        st.metric(f"Maximum Loss ({account_currency})", f"{currency_symbol}{total_loss:.2f}")
         
         # Color code the risk percentage
         risk_color = "green" if risk_percentage <= 2 else "orange" if risk_percentage <= 5 else "red"
-        st.metric("Risk Percentage", f"{risk_percentage:.2f}%", delta=None, 
-                  delta_color="off", help=f"Of your {account_balance} {account_currency} account")
+        st.metric("Risk Percentage", f"{risk_percentage:.2f}%", delta=None, delta_color="off", help=f"Of your {account_balance} {account_currency} account")
         
         # Risk assessment
         if risk_percentage > 5:
@@ -268,9 +239,9 @@ with tab2:
         st.metric("XAUUSD Price", f"${xauusd_price:.2f}")
         
     with col2:
-        st.metric("Total Margin Required", f"{margin_required:.2f} {account_currency}")
+        st.metric("Total Margin Required", f"{currency_symbol}{margin_required:.2f}")
         st.metric("Margin Usage", f"{margin_usage_percentage:.2f}%")
-        st.metric("Free Margin", f"{account_balance - margin_required:.2f} {account_currency}")
+        st.metric("Free Margin", f"{currency_symbol}{account_balance - margin_required:.2f}")
     
     # Margin usage assessment
     if margin_usage_percentage > 50:
@@ -294,11 +265,9 @@ with tab2:
         """)
         
         if account_currency != "USD":
-            conversion_rate = margin_required / margin_required_usd
             st.write(f"""
             **Currency Conversion:**
-            - USD to {account_currency} conversion rate: {conversion_rate:.4f}
-            - Final Margin: ${margin_required_usd:.2f} × {conversion_rate:.4f} = {margin_required:.2f} {account_currency}
+            - Converted to {account_currency}: {margin_required:.2f}
             """)
 
 with tab3:
@@ -311,10 +280,10 @@ with tab3:
         # Risk per layer chart
         risk_chart_data = pd.DataFrame({
             'Layer': [f'Layer {i+1}' for i in range(num_layers)],
-            'Risk per Trade ($)': loss_per_trade_per_layer
+            'Risk per Trade ($)': [l * t for l, t in zip(loss_per_trade_per_layer_usd, trades_per_layer_list)]
         })
         st.bar_chart(risk_chart_data.set_index('Layer'), use_container_width=True)
-        st.caption("Risk per Trade by Layer")
+        st.caption("Risk per Layer (in USD)")
     
     with col2:
         # Margin vs Risk chart
@@ -357,7 +326,7 @@ if st.button("🔄 Refresh Live Prices"):
 # Footer with disclaimer
 st.markdown("---")
 st.caption(f"""
-**Disclaimer:** Live prices from Yahoo Finance. This calculator provides estimates only. 
+**Disclaimer:** Live prices from Yahoo Finance. This calculator provides estimates only.
 Actual trading results and margin requirements may vary. Prices updated: {live_prices['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}
 Always verify pip values and margin requirements with your broker. Practice proper risk management.
 """)
