@@ -156,7 +156,7 @@ else:
 
 # --- NEW: Dynamic Risk Formula ---
 start_balance = 1000
-end_balance = 200000
+end_balance = 150000
 def risk_percent(balance):
     balance = max(start_balance, min(balance, end_balance))
     return 0.10 - ((balance - start_balance) / (end_balance - start_balance)) * (0.10 - 0.025)
