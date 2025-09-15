@@ -112,9 +112,9 @@ st.sidebar.header("Trading Parameters")
 num_layers = st.sidebar.slider("Number of Layers", min_value=1, max_value=12, value=6, help="How many entry levels you will use")
 lot_size_per_trade = st.sidebar.number_input("Lot Size per Trade", min_value=0.01, max_value=10.0, value=0.01, step=0.01, help="Size of each trade in lots")
 pip_value = st.sidebar.number_input("Pip Value ($ per 0.01 lot)", min_value=0.1, max_value=10.0, value=0.1, step=0.1, help="Dollar value of 1 pip movement for a 0.01 lot trade")
-sl_distance_pips = st.sidebar.number_input("SL Distance from 1st Layer (pips)", min_value=10, max_value=500, value=60, step=10, help="Distance from your first entry to stop-loss")
+sl_distance_pips = st.sidebar.number_input("SL Distance from 1st Layer (pips)", min_value=10, max_value=500, value=80, step=10, help="Distance from your first entry to stop-loss")
 distance_first_to_last_layer = st.sidebar.number_input("Distance between 1st-Last Layer (pips)", min_value=10, max_value=50, value=30, step=10, help="Price difference between your first and last entry")
-account_balance = st.sidebar.number_input("Account Balance", min_value=100, max_value=100000, value=1000, step=100)
+account_balance = st.sidebar.number_input("Account Balance", min_value=100, max_value=1000000, value=1000, step=100)
 
 # Margin calculation inputs
 st.sidebar.header("Margin Calculation")
