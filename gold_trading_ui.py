@@ -179,6 +179,21 @@ else:
 margin_usage_percentage = (margin_required / account_balance) * 100
 currency_symbol = CURRENCY_SYMBOLS.get(account_currency, "$")
 
+# --- NEW: Expected Profit Function ---
+def calculate_expected_profit(lot_size, trades_per_layer, num_layers, price_gap_pips, base_profit=100):
+    total_trades = sum(trades_per_layer)
+    lot_multiplier = lot_size / 0.01
+    trades_multiplier = total_trades / 32  # baseline 32 trades
+    complexity_factor = 1 + ((num_layers - 6) * 0.05) + ((price_gap_pips / 30) * 0.1)
+    return base_profit * lot_multiplier * trades_multiplier * complexity_factor
+
+expected_profit = calculate_expected_profit(
+    lot_size_per_trade,
+    trades_per_layer_list,
+    num_layers,
+    price_gap_pips
+)
+
 # --- Tabs ---
 tab1, tab2, tab3 = st.tabs(["📊 Trading Plan", "💰 Margin Analysis", "📈 Visualizations"])
 
@@ -188,6 +203,7 @@ with tab1:
     with col1:
         st.metric("Total Trades", f"{sum(trades_per_layer_list)}")
         st.metric("Total Lot Size", f"{total_lots:.2f} lots")
+        st.metric(f"Expected Daily Profit ({account_currency})", f"{currency_symbol}{expected_profit:.2f}")
     with col2:
         st.metric(f"Maximum Loss ({account_currency})", f"{currency_symbol}{total_loss:.2f}")
         st.metric("Actual Risk %", f"{actual_risk_percentage:.2f}%")
