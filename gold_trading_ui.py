@@ -105,12 +105,12 @@ st.markdown("---")
 # User inputs in sidebar
 st.sidebar.header("Trading Parameters")
 
-num_layers = st.sidebar.slider("Number of Layers", 1, 12, 6)
-lot_size_per_trade = st.sidebar.number_input("Lot Size per Trade", 0.01, 10.0, 0.01, 0.01)
+num_layers = st.sidebar.slider("Number of Layers", 1, 16, 8)
+lot_size_per_trade = st.sidebar.number_input("Lot Size per Trade", 0.01, 10.0, 0.02, 0.01)
 pip_value = st.sidebar.number_input("Pip Value ($ per 0.01 lot)", 0.1, 10.0, 0.1, 0.1)
 sl_distance_pips = st.sidebar.number_input("SL Distance from 1st Layer (pips)", 10, 500, 80, 10)
-distance_first_to_last_layer = st.sidebar.number_input("Distance between 1st-Last Layer (pips)", 10, 50, 30, 10)
-account_balance = st.sidebar.number_input("Account Balance", 100, 1000000, 2000, 100)
+distance_first_to_last_layer = st.sidebar.number_input("Distance between 1st-Last Layer (pips)", 10, 50, 40, 10)
+account_balance = st.sidebar.number_input("Account Balance", 100, 1000000, 4500, 100)
 
 st.sidebar.header("Margin Calculation")
 account_currency = st.sidebar.selectbox("Account Currency", ["EUR", "USD", "GBP", "CHF", "AUD", "CAD", "JPY"], 0)
