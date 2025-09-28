@@ -144,7 +144,7 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Trades per Layer")
 trades_per_layer_list = []
-default_trades = [4, 4, 4, 4, 8, 8]
+default_trades = [4, 4, 4, 4, 4, 8, 8, 8]
 for i in range(num_layers):
     default_value = default_trades[i] if i < len(default_trades) else 4
     trades = st.sidebar.slider(f"Layer {i+1} Trades", 1, 10, default_value, key=f'trades_l{i+1}')
