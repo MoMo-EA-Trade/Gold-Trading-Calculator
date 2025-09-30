@@ -49,14 +49,25 @@ def get_live_prices():
         
         data = yf.download(tickers, period="1d", interval="1m", progress=False)['Close']
 
-        # Extract latest close prices, falling back to safe defaults
-        gold_price = data['GC=F'].iloc[-1] if 'GC=F' in data.columns and not data['GC=F'].empty else 3000.0
-        eurusd_rate = data['EURUSD=X'].iloc[-1] if 'EURUSD=X' in data.columns and not data['EURUSD=X'].empty else 1.08
-        gbpusd_rate = data['GBPUSD=X'].iloc[-1] if 'GBPUSD=X' in data.columns and not data['GBPUSD=X'].empty else 1.26
-        audusd_rate = data['AUDUSD=X'].iloc[-1] if 'AUDUSD=X' in data.columns and not data['AUDUSD=X'].empty else 0.65
-        usdcad_rate = data['CAD=X'].iloc[-1] if 'CAD=X' in data.columns and not data['CAD=X'].empty else 1.35
-        usdchf_rate = data['CHF=X'].iloc[-1] if 'CHF=X' in data.columns and not data['CHF=X'].empty else 0.88
-        usdjpy_rate = data['JPY=X'].iloc[-1] if 'JPY=X' in data.columns and not data['JPY=X'].empty else 148.0
+        # --- Refactored Extraction for Robustness ---
+        def extract_price(ticker_name, default_value):
+            """
+            Extracts the latest price for a ticker, falling back to a default
+            if the data is missing or is NaN (Not a Number).
+            """
+            if ticker_name in data.columns and not data[ticker_name].empty:
+                price = data[ticker_name].iloc[-1]
+                # Use numpy to convert NaN to the default value if necessary
+                return np.nan_to_num(price, nan=default_value)
+            return default_value
+
+        gold_price = extract_price('GC=F', 3000.0)
+        eurusd_rate = extract_price('EURUSD=X', 1.08)
+        gbpusd_rate = extract_price('GBPUSD=X', 1.26)
+        audusd_rate = extract_price('AUDUSD=X', 0.65)
+        usdcad_rate = extract_price('CAD=X', 1.35)
+        usdchf_rate = extract_price('CHF=X', 0.88)
+        usdjpy_rate = extract_price('JPY=X', 148.0)
         
         return {
             'xauusd': float(gold_price),
@@ -308,6 +319,9 @@ def calculate_layer_metrics(balance, lot_size, pip_val, sl_pips, distance_to_las
             "allowed_risk_pct": allowed_risk_pct
         })
     return suggestions
+
+# Get live prices
+live_prices = get_live_prices() # Call again to use the fixed version
 
 # --- Tabs ---
 tab1, tab2, tab_auto, tab3 = st.tabs(
