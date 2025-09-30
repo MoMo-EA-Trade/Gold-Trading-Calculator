@@ -306,6 +306,8 @@ with tab2:
         st.info("ℹ️ Moderate margin usage.")
     else:
         st.success("✅ Healthy margin usage.")
+
+
 with tab_auto:
     st.subheader("⚙️ Auto Trade Layer Calculation")
 
@@ -317,8 +319,10 @@ with tab_auto:
             price_gap = distance_first_to_last_layer / (layers - 1) if layers > 1 else 0
             dist_to_sl = [sl_pips - (i * price_gap) for i in range(layers)]
 
-            # Example distribution: first 2/3 of layers = 4 trades, last 1/3 = 8 trades
-            trades_distribution = [4 if i < layers * 2 / 3 else 8 for i in range(layers)]
+# Example distribution: first 2/3 of layers = 4 trades, last 1/3 = 8 trades
+num_first = int(round(layers * 2 / 3))
+trades_distribution = [4 if i < num_first else 8 for i in range(layers)]
+
 
             # Calculate total loss
             loss_per_layer = [
