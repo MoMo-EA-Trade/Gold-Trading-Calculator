@@ -263,7 +263,10 @@ expected_profit_eur = calculate_expected_profit(
 expected_profit_converted = convert_eur_to(expected_profit_eur, account_currency, live_prices, conversion_rate_usd_to_account)
 
 # --- Tabs ---
-tab1, tab2, tab3 = st.tabs(["📊 Trading Plan", "💰 Margin Analysis", "📈 Visualizations"])
+tab1, tab2, tab_auto, tab3 = st.tabs(
+    ["📊 Trading Plan", "💰 Margin Analysis", "⚙️ Auto Calculation", "📈 Visualizations"]
+)
+
 
 with tab1:
     st.subheader("📊 Trading Plan")
@@ -303,6 +306,68 @@ with tab2:
         st.info("ℹ️ Moderate margin usage.")
     else:
         st.success("✅ Healthy margin usage.")
+with tab_auto:
+    st.subheader("⚙️ Auto Trade Layer Calculation")
+
+    auto_balance = st.number_input("Enter Account Balance for Auto Suggestion", 100, 1000000, account_balance, 100)
+
+    def suggest_layers(balance, lot_size, pip_val, sl_pips, max_layers=(6, 7, 8)):
+        suggestions = []
+        for layers in max_layers:
+            price_gap = distance_first_to_last_layer / (layers - 1) if layers > 1 else 0
+            dist_to_sl = [sl_pips - (i * price_gap) for i in range(layers)]
+
+            # Example distribution: first 2/3 of layers = 4 trades, last 1/3 = 8 trades
+            trades_distribution = [4 if i < layers * 2 / 3 else 8 for i in range(layers)]
+
+            # Calculate total loss
+            loss_per_layer = [
+                max(0, d) * pip_val * (lot_size / 0.01) * trades_distribution[i]
+                for i, d in enumerate(dist_to_sl)
+            ]
+            total_loss_usd = sum(loss_per_layer)
+
+            # Convert loss to account currency
+            if account_currency in ["EUR", "GBP", "AUD"]:
+                total_loss = total_loss_usd / conversion_rate_usd_to_account if conversion_rate_usd_to_account else total_loss_usd
+            elif account_currency in ["CAD", "CHF", "JPY"]:
+                total_loss = total_loss_usd * conversion_rate_usd_to_account
+            else:
+                total_loss = total_loss_usd
+
+            # Risk percentage
+            risk_pct = (total_loss / balance) * 100 if balance else 0
+            allowed_risk_pct = risk_percent(balance) * 100
+
+            suggestions.append({
+                "layers": layers,
+                "trades_distribution": trades_distribution,
+                "total_trades": sum(trades_distribution),
+                "total_loss": total_loss,
+                "risk_pct": risk_pct,
+                "allowed_risk_pct": allowed_risk_pct
+            })
+
+        return suggestions
+
+    # Generate suggestions
+    auto_suggestions = suggest_layers(auto_balance, lot_size_per_trade, pip_value, sl_distance_pips)
+
+    st.write("### Suggested Trade Configurations")
+    for s in auto_suggestions:
+        st.markdown(f"**{s['layers']} Layers** → {s['trades_distribution']}")
+        st.write(f"- Total Trades: {s['total_trades']}")
+        st.write(f"- Max Loss: {currency_symbol}{s['total_loss']:.2f}")
+        st.write(f"- Risk: {s['risk_pct']:.2f}% (Allowed: {s['allowed_risk_pct']:.2f}%)")
+
+        if s["risk_pct"] > s["allowed_risk_pct"]:
+            st.error("🚨 Risk too high!")
+        elif s["risk_pct"] > s["allowed_risk_pct"] * 0.75:
+            st.warning("⚠️ Close to max risk.")
+        else:
+            st.success("✅ Within safe risk level.")
+
+        st.markdown("---")
 
 with tab3:
     st.subheader("📈 Visual Risk Representation")
