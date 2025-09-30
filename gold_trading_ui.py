@@ -105,7 +105,7 @@ st.markdown("---")
 # User inputs in sidebar
 st.sidebar.header("Trading Parameters")
 
-num_layers = st.sidebar.slider("Number of Layers", 1, 16, 8)
+num_layers = st.sidebar.slider("Number of Layers", 1, 8, 8)
 lot_size_per_trade = st.sidebar.number_input("Lot Size per Trade", 0.01, 10.0, 0.02, 0.01)
 pip_value = st.sidebar.number_input("Pip Value ($ per 0.01 lot)", 0.1, 10.0, 0.1, 0.1)
 sl_distance_pips = st.sidebar.number_input("SL Distance from 1st Layer (pips)", 10, 500, 80, 10)
