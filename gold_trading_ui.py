@@ -47,18 +47,21 @@ def get_live_prices():
         # Fetch Gold (GC=F) and relevant FX pairs
         tickers = ["GC=F", "EURUSD=X", "GBPUSD=X", "AUDUSD=X", "CAD=X", "CHF=X", "JPY=X"]
         
+        # Fetch the last 1 day of 1-minute interval data
         data = yf.download(tickers, period="1d", interval="1m", progress=False)['Close']
 
-        # --- Refactored Extraction for Robustness ---
         def extract_price(ticker_name, default_value):
             """
-            Extracts the latest price for a ticker, falling back to a default
-            if the data is missing or is NaN (Not a Number).
+            Extracts the latest non-NaN price for a ticker, falling back to a default
+            if no valid price is found in the fetched data.
             """
             if ticker_name in data.columns and not data[ticker_name].empty:
-                price = data[ticker_name].iloc[-1]
-                # Use numpy to convert NaN to the default value if necessary
-                return np.nan_to_num(price, nan=default_value)
+                # Filter out NaN values and get the last valid price
+                valid_prices = data[ticker_name].dropna()
+                if not valid_prices.empty:
+                    # Return the last valid price found
+                    return float(valid_prices.iloc[-1])
+            # Return default if column is missing or all prices are invalid
             return default_value
 
         gold_price = extract_price('GC=F', 3000.0)
@@ -70,17 +73,17 @@ def get_live_prices():
         usdjpy_rate = extract_price('JPY=X', 148.0)
         
         return {
-            'xauusd': float(gold_price),
-            'eurusd': float(eurusd_rate),
-            'gbpusd': float(gbpusd_rate),
-            'audusd': float(audusd_rate),
-            'usdcad': float(usdcad_rate),
-            'usdchf': float(usdchf_rate),
-            'usdjpy': float(usdjpy_rate),
+            'xauusd': gold_price,
+            'eurusd': eurusd_rate,
+            'gbpusd': gbpusd_rate,
+            'audusd': audusd_rate,
+            'usdcad': usdcad_rate,
+            'usdchf': usdchf_rate,
+            'usdjpy': usdjpy_rate,
             'timestamp': datetime.now()
         }
     except Exception as e:
-        # st.error(f"Error fetching live prices (using default mock data): {e}") # Suppressing error display for cleaner UI
+        # Fallback to mock data if the API call fails entirely
         return {
             'xauusd': 3000.0,
             'eurusd': 1.08,
@@ -209,7 +212,7 @@ margin_required = np.nan_to_num(margin_required)
 margin_usage_percentage = (margin_required / account_balance) * 100 if account_balance else 0
 currency_symbol = CURRENCY_SYMBOLS.get(account_currency, "$")
 
-# Expected Profit Function (kept as is)
+# Expected Profit Function
 def calculate_expected_profit(lot_size, trades_per_layer, num_layers, price_gap_pips, base_profit=100):
     total_trades = sum(trades_per_layer)
     lot_multiplier = lot_size / 0.01
@@ -218,7 +221,7 @@ def calculate_expected_profit(lot_size, trades_per_layer, num_layers, price_gap_
     complexity_factor = max(0.5, complexity_factor)
     return base_profit * lot_multiplier * trades_multiplier * complexity_factor
 
-# Conversion function (kept as is)
+# Conversion function
 def convert_eur_to(amount_eur, account_currency, live_prices, conv_rate_usd_to_account):
     """Convert amount expressed in EUR to target account_currency."""
     try:
@@ -321,7 +324,7 @@ def calculate_layer_metrics(balance, lot_size, pip_val, sl_pips, distance_to_las
     return suggestions
 
 # Get live prices
-live_prices = get_live_prices() # Call again to use the fixed version
+live_prices = get_live_prices() # Re-call to use the improved logic
 
 # --- Tabs ---
 tab1, tab2, tab_auto, tab3 = st.tabs(
