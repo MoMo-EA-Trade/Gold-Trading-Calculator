@@ -15,42 +15,49 @@ CURRENCY_SYMBOLS = {
     "JPY": "¥"
 }
 
+# --- Risk Tiers for Dynamic Risk Calculation ---
+start_balance = 1000
+end_balance = 150000
+def risk_percent(balance):
+    """Calculates allowed risk percentage based on account balance."""
+    # Cap balance between start_balance (10%) and end_balance (2.5%)
+    balance = max(start_balance, min(balance, end_balance))
+    return 0.10 - ((balance - start_balance) / (end_balance - start_balance)) * (0.10 - 0.025)
+
+# --- Fixed Auto-Calculation Configurations (New) ---
+# (Layers, Config Type, Trades Distribution List)
+FIXED_CONFIGS = [
+    (6, "Normal", [4, 4, 4, 4, 4, 4]),
+    (6, "Effective", [4, 4, 4, 4, 8, 8]),
+    (7, "Normal", [4, 4, 4, 4, 4, 4, 4]),
+    (7, "Effective", [4, 4, 4, 4, 4, 8, 8]),
+    (8, "Normal", [4, 4, 4, 4, 4, 4, 4, 4]),
+    (8, "Effective", [4, 4, 4, 4, 4, 8, 8, 8]),
+]
+
 # Configure the page
 st.set_page_config(page_title="Gold Trading Calculator", layout="wide")
 st.title("💰 Gold Trading Calculator")
 st.markdown("Calculate risk and margin requirements for your layered trading strategy with live prices")
 
 # Function to get live prices from Yahoo Finance
-@st.cache_data(ttl=30)  # Cache for 30 seconds
+@st.cache_data(ttl=30) # Cache for 30 seconds
 def get_live_prices():
     try:
-        gold = yf.Ticker("GC=F")
-        gold_data = gold.history(period="1d", interval="1m")
-        gold_price = gold_data['Close'].iloc[-1] if not gold_data.empty else 1950.0
+        # Fetch Gold (GC=F) and relevant FX pairs
+        tickers = ["GC=F", "EURUSD=X", "GBPUSD=X", "AUDUSD=X", "CAD=X", "CHF=X", "JPY=X"]
         
-        eurusd = yf.Ticker("EURUSD=X")
-        eurusd_data = eurusd.history(period="1d", interval="1m")
-        eurusd_rate = eurusd_data['Close'].iloc[-1] if not eurusd_data.empty else 1.08
-        
-        gbpusd = yf.Ticker("GBPUSD=X")
-        gbpusd_data = gbpusd.history(period="1d", interval="1m")
-        gbpusd_rate = gbpusd_data['Close'].iloc[-1] if not gbpusd_data.empty else 1.26
-        
-        audusd = yf.Ticker("AUDUSD=X")
-        audusd_data = audusd.history(period="1d", interval="1m")
-        audusd_rate = audusd_data['Close'].iloc[-1] if not audusd_data.empty else 0.65
-        
-        usdcad = yf.Ticker("CAD=X")
-        usdcad_data = usdcad.history(period="1d", interval="1m")
-        usdcad_rate = usdcad_data['Close'].iloc[-1] if not usdcad_data.empty else 1.35
-        
-        usdchf = yf.Ticker("CHF=X")
-        usdchf_data = usdchf.history(period="1d", interval="1m")
-        usdchf_rate = usdchf_data['Close'].iloc[-1] if not usdchf_data.empty else 0.88
-        
-        usdjpy = yf.Ticker("JPY=X")
-        usdjpy_data = usdjpy.history(period="1d", interval="1m")
-        usdjpy_rate = usdjpy_data['Close'].iloc[-1] if not usdjpy_data.empty else 148.0
+        # We fetch all at once to potentially improve performance, though yf.download can sometimes be slow in environments like Streamlit Cloud
+        data = yf.download(tickers, period="1d", interval="1m", progress=False)['Close']
+
+        # Extract latest close prices, falling back to safe defaults
+        gold_price = data['GC=F'].iloc[-1] if 'GC=F' in data.columns and not data['GC=F'].empty else 3000.0
+        eurusd_rate = data['EURUSD=X'].iloc[-1] if 'EURUSD=X' in data.columns and not data['EURUSD=X'].empty else 1.08
+        gbpusd_rate = data['GBPUSD=X'].iloc[-1] if 'GBPUSD=X' in data.columns and not data['GBPUSD=X'].empty else 1.26
+        audusd_rate = data['AUDUSD=X'].iloc[-1] if 'AUDUSD=X' in data.columns and not data['AUDUSD=X'].empty else 0.65
+        usdcad_rate = data['CAD=X'].iloc[-1] if 'CAD=X' in data.columns and not data['CAD=X'].empty else 1.35
+        usdchf_rate = data['CHF=X'].iloc[-1] if 'CHF=X' in data.columns and not data['CHF=X'].empty else 0.88
+        usdjpy_rate = data['JPY=X'].iloc[-1] if 'JPY=X' in data.columns and not data['JPY=X'].empty else 148.0
         
         return {
             'xauusd': gold_price,
@@ -63,7 +70,7 @@ def get_live_prices():
             'timestamp': datetime.now()
         }
     except Exception as e:
-        st.error(f"Error fetching live prices: {e}")
+        st.error(f"Error fetching live prices (using default mock data): {e}")
         return {
             'xauusd': 3000.0,
             'eurusd': 1.08,
@@ -118,25 +125,19 @@ leverage = st.sidebar.selectbox("Account Leverage", ["1:50","1:100","1:200","1:3
 xauusd_price = st.sidebar.number_input("Current XAUUSD Price", 100.0, 10000.0, float(live_prices['xauusd']), 0.1)
 
 st.sidebar.header("Current Exchange Rates (you can override)")
-# We'll let the user override the relevant pair for their account currency (keeps UI tidy).
 conversion_rate_usd_to_account = 1.0
+# Logic to handle currency conversion rate input
 if account_currency == "EUR":
-    # USD per EUR
     conversion_rate_usd_to_account = st.sidebar.number_input("EURUSD Rate (USD per EUR)", 0.5, 2.0, float(live_prices['eurusd']), 0.0001, format="%.4f")
 elif account_currency == "GBP":
-    # USD per GBP
     conversion_rate_usd_to_account = st.sidebar.number_input("GBPUSD Rate (USD per GBP)", 0.5, 2.0, float(live_prices['gbpusd']), 0.0001, format="%.4f")
 elif account_currency == "AUD":
-    # USD per AUD
     conversion_rate_usd_to_account = st.sidebar.number_input("AUDUSD Rate (USD per AUD)", 0.5, 2.0, float(live_prices['audusd']), 0.0001, format="%.4f")
 elif account_currency == "CAD":
-    # CAD per USD
     conversion_rate_usd_to_account = st.sidebar.number_input("USDCAD Rate (CAD per USD)", 0.5, 2.5, float(live_prices['usdcad']), 0.0001, format="%.4f")
 elif account_currency == "CHF":
-    # CHF per USD
     conversion_rate_usd_to_account = st.sidebar.number_input("USDCHF Rate (CHF per USD)", 0.5, 2.0, float(live_prices['usdchf']), 0.0001, format="%.4f")
 elif account_currency == "JPY":
-    # JPY per USD
     conversion_rate_usd_to_account = st.sidebar.number_input("USDJPY Rate (JPY per USD)", 50.0, 200.0, float(live_prices['usdjpy']), 0.1, format="%.1f")
 else:
     conversion_rate_usd_to_account = 1.0
@@ -144,19 +145,19 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Trades per Layer")
 trades_per_layer_list = []
-default_trades = [4, 4, 4, 4, 4, 8, 8, 8]
+default_trades = [4, 4, 4, 4, 4, 8, 8, 8] # Default effective distribution
 for i in range(num_layers):
     default_value = default_trades[i] if i < len(default_trades) else 4
     trades = st.sidebar.slider(f"Layer {i+1} Trades", 1, 10, default_value, key=f'trades_l{i+1}')
     trades_per_layer_list.append(trades)
 
-# --- Calculations ---
+# --- Calculations for User's Custom Plan ---
 price_gap_pips = distance_first_to_last_layer / (num_layers - 1) if num_layers > 1 else 0
 distance_to_sl_per_layer = [sl_distance_pips - (i * price_gap_pips) for i in range(num_layers)]
 loss_per_trade_per_layer_usd = [max(0, distance) * pip_value * (lot_size_per_trade / 0.01) for distance in distance_to_sl_per_layer]
 total_loss_usd = sum([loss_per_trade_per_layer_usd[i] * trades_per_layer_list[i] for i in range(num_layers)])
 
-# Convert USD losses to account currency using the sidebar-provided rate (keeps behavior consistent)
+# Convert USD losses to account currency
 if account_currency in ["EUR","GBP","AUD"]:
     # conversion_rate_usd_to_account is USD per account_currency (USD/EUR, USD/GBP, USD/AUD)
     total_loss = total_loss_usd / conversion_rate_usd_to_account if conversion_rate_usd_to_account else total_loss_usd
@@ -166,20 +167,13 @@ elif account_currency in ["CAD","CHF","JPY"]:
 else:
     total_loss = total_loss_usd
 
-# --- NEW: Dynamic Risk Formula ---
-start_balance = 1000
-end_balance = 150000
-def risk_percent(balance):
-    balance = max(start_balance, min(balance, end_balance))
-    return 0.10 - ((balance - start_balance) / (end_balance - start_balance)) * (0.10 - 0.025)
-
 allowed_risk_percentage = risk_percent(account_balance) * 100
 actual_risk_percentage = (total_loss / account_balance) * 100 if account_balance else 0
 
 # Margin calculation
 leverage_ratio = int(leverage.split(":")[1])
 total_lots = sum([trades * lot_size_per_trade for trades in trades_per_layer_list])
-contract_size = 100
+contract_size = 100 # Standard for XAUUSD CFDs per 1.0 lot
 margin_required_usd = (total_lots * contract_size * xauusd_price) / leverage_ratio
 if account_currency in ["EUR","GBP","AUD"]:
     margin_required = margin_required_usd / conversion_rate_usd_to_account if conversion_rate_usd_to_account else margin_required_usd
@@ -191,26 +185,18 @@ else:
 margin_usage_percentage = (margin_required / account_balance) * 100 if account_balance else 0
 currency_symbol = CURRENCY_SYMBOLS.get(account_currency, "$")
 
-# --- NEW: Expected Profit Function ---
+# Expected Profit Function (kept as is)
 def calculate_expected_profit(lot_size, trades_per_layer, num_layers, price_gap_pips, base_profit=100):
     total_trades = sum(trades_per_layer)
     lot_multiplier = lot_size / 0.01
-    trades_multiplier = total_trades / 32  # baseline 32 trades for default 6 layers [4,4,4,4,8,8]
+    trades_multiplier = total_trades / 32 # baseline 32 trades for default 6 layers [4,4,4,4,8,8]
     complexity_factor = 1 + ((num_layers - 6) * 0.05) + ((price_gap_pips / 30) * 0.1)
-    # keep a lower bound on complexity factor to avoid extreme negative/zero
     complexity_factor = max(0.5, complexity_factor)
     return base_profit * lot_multiplier * trades_multiplier * complexity_factor
 
-# Convert expected profit (base is EUR) to account currency using live prices and the sidebar override for the chosen pair
+# Conversion function (kept as is)
 def convert_eur_to(amount_eur, account_currency, live_prices, conv_rate_usd_to_account):
-    """
-    Convert amount expressed in EUR to target account_currency.
-    Uses:
-      - live_prices['eurusd']  => USD per EUR
-      - conv_rate_usd_to_account => user override for the rate relevant to the chosen account currency
-         * For EUR/GBP/AUD (we expect USD per GBP/AUD etc) conv_rate_usd_to_account is USD per target currency.
-         * For CAD/CHF/JPY conv_rate_usd_to_account is target currency per USD.
-    """
+    """Convert amount expressed in EUR to target account_currency."""
     try:
         eurusd = float(live_prices.get('eurusd', 1.08))
     except Exception:
@@ -221,35 +207,33 @@ def convert_eur_to(amount_eur, account_currency, live_prices, conv_rate_usd_to_a
     if account_currency == "USD":
         return amount_eur * eurusd
 
-    # If conversion rate override is missing/falsy, attempt to use live_prices where possible
-    if not conv_rate_usd_to_account:
-        # fill conv_rate from live_prices per currency
+    # Use live prices as fallback if the user input (conv_rate_usd_to_account) is missing/falsy
+    current_conv_rate = conv_rate_usd_to_account
+    if not current_conv_rate:
         if account_currency == "GBP":
-            conv_rate_usd_to_account = live_prices.get('gbpusd', None)  # USD per GBP
+            current_conv_rate = live_prices.get('gbpusd', 1.25)
         elif account_currency == "AUD":
-            conv_rate_usd_to_account = live_prices.get('audusd', None)  # USD per AUD
+            current_conv_rate = live_prices.get('audusd', 0.65)
         elif account_currency == "CAD":
-            conv_rate_usd_to_account = live_prices.get('usdcad', None)  # CAD per USD
+            current_conv_rate = live_prices.get('usdcad', 1.35)
         elif account_currency == "CHF":
-            conv_rate_usd_to_account = live_prices.get('usdchf', None)  # CHF per USD
+            current_conv_rate = live_prices.get('usdchf', 0.88)
         elif account_currency == "JPY":
-            conv_rate_usd_to_account = live_prices.get('usdjpy', None)  # JPY per USD
+            current_conv_rate = live_prices.get('usdjpy', 148.0)
 
     try:
-        # currencies quoted as USD per CUR (GBP, AUD) -> EUR->CUR = (USD per EUR) / (USD per CUR)
+        current_conv_rate = float(current_conv_rate)
+        # currencies quoted as USD per CUR (GBP, AUD)
         if account_currency in ["GBP", "AUD"]:
-            if conv_rate_usd_to_account:
-                rate = eurusd / float(conv_rate_usd_to_account)
-                return amount_eur * rate
-        # currencies quoted as CUR per USD (CAD, CHF, JPY) -> EUR->CUR = (USD per EUR) * (CUR per USD)
+            rate = eurusd / current_conv_rate
+            return amount_eur * rate
+        # currencies quoted as CUR per USD (CAD, CHF, JPY)
         elif account_currency in ["CAD", "CHF", "JPY"]:
-            if conv_rate_usd_to_account:
-                rate = eurusd * float(conv_rate_usd_to_account)
-                return amount_eur * rate
+            rate = eurusd * current_conv_rate
+            return amount_eur * rate
     except Exception:
         pass
 
-    # fallback: return EUR amount (if we cannot compute conversion)
     return amount_eur
 
 expected_profit_eur = calculate_expected_profit(
@@ -262,6 +246,44 @@ expected_profit_eur = calculate_expected_profit(
 
 expected_profit_converted = convert_eur_to(expected_profit_eur, account_currency, live_prices, conversion_rate_usd_to_account)
 
+# --- NEW Function for Auto-Calculation Logic ---
+def calculate_layer_metrics(balance, lot_size, pip_val, sl_pips, distance_to_last, account_currency, conversion_rate):
+    """Calculates risk for the fixed trade configurations."""
+    suggestions = []
+    for layers, config_type, trades_distribution in FIXED_CONFIGS:
+        price_gap = distance_to_last / (layers - 1) if layers > 1 else 0
+        dist_to_sl = [sl_pips - (i * price_gap) for i in range(layers)]
+
+        # Calculate loss in USD
+        loss_per_layer_usd = [
+            max(0, d) * pip_val * (lot_size / 0.01) * trades_distribution[i]
+            for i, d in enumerate(dist_to_sl)
+        ]
+        total_loss_usd = sum(loss_per_layer_usd)
+
+        # Convert loss to account currency
+        if account_currency in ["EUR", "GBP", "AUD"]:
+            total_loss = total_loss_usd / conversion_rate if conversion_rate else total_loss_usd
+        elif account_currency in ["CAD", "CHF", "JPY"]:
+            total_loss = total_loss_usd * conversion_rate
+        else:
+            total_loss = total_loss_usd
+
+        # Risk percentage
+        risk_pct = (total_loss / balance) * 100 if balance else 0
+        allowed_risk_pct = risk_percent(balance) * 100
+
+        suggestions.append({
+            "layers": layers,
+            "config_type": config_type,
+            "trades_distribution": trades_distribution,
+            "total_trades": sum(trades_distribution),
+            "total_loss": total_loss,
+            "risk_pct": risk_pct,
+            "allowed_risk_pct": allowed_risk_pct
+        })
+    return suggestions
+
 # --- Tabs ---
 tab1, tab2, tab_auto, tab3 = st.tabs(
     ["📊 Trading Plan", "💰 Margin Analysis", "⚙️ Auto Calculation", "📈 Visualizations"]
@@ -269,7 +291,7 @@ tab1, tab2, tab_auto, tab3 = st.tabs(
 
 
 with tab1:
-    st.subheader("📊 Trading Plan")
+    st.subheader("📊 Trading Plan (Custom Configuration)")
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Total Trades", f"{sum(trades_per_layer_list)}")
@@ -310,67 +332,62 @@ with tab2:
 
 with tab_auto:
     st.subheader("⚙️ Auto Trade Layer Calculation")
+    st.markdown("Compare risk for pre-defined 6, 7, and 8-layer configurations using your current Lot Size, Pip Value, and SL distance parameters.")
 
-    auto_balance = st.number_input("Enter Account Balance for Auto Suggestion", 100, 1000000, account_balance, 100)
+    auto_balance = st.number_input("Enter Account Balance for Auto Suggestion", 100, 1000000, account_balance, 100, key='auto_balance_input')
 
-    def suggest_layers(balance, lot_size, pip_val, sl_pips, max_layers=(6, 7, 8)):
-        suggestions = []
-        for layers in max_layers:
-            price_gap = distance_first_to_last_layer / (layers - 1) if layers > 1 else 0
-            dist_to_sl = [sl_pips - (i * price_gap) for i in range(layers)]
+    # Generate suggestions using the new fixed logic
+    auto_suggestions = calculate_layer_metrics(
+        auto_balance,
+        lot_size_per_trade,
+        pip_value,
+        sl_distance_pips,
+        distance_first_to_last_layer,
+        account_currency,
+        conversion_rate_usd_to_account
+    )
 
-            # Corrected distribution: first 2/3 layers = 4 trades, last 1/3 = 8 trades
-            num_first = int(round(layers * 2 / 3))
-            trades_distribution = [4 if i < num_first else 8 for i in range(layers)]
+    st.write("### Suggested Trade Configurations & Risk Assessment")
+    
+    # Display results in two columns for better comparison
+    col_normal, col_effective = st.columns(2)
 
-            # Calculate total loss
-            loss_per_layer = [
-                max(0, d) * pip_val * (lot_size / 0.01) * trades_distribution[i]
-                for i, d in enumerate(dist_to_sl)
-            ]
-            total_loss_usd = sum(loss_per_layer)
+    # Filter and display Normal configurations
+    with col_normal:
+        st.markdown("#### Normal Distribution (Equal Trades)")
+        for s in [s for s in auto_suggestions if s['config_type'] == 'Normal']:
+            st.markdown(f"**{s['layers']} Layers (Normal)**")
+            st.caption(f"Trades: {s['trades_distribution']}")
+            st.write(f"- Total Trades: **{s['total_trades']}**")
+            st.write(f"- Max Loss: **{currency_symbol}{s['total_loss']:.2f}**")
+            st.write(f"- Risk: **{s['risk_pct']:.2f}%** (Allowed: {s['allowed_risk_pct']:.2f}%)")
 
-            # Convert loss to account currency
-            if account_currency in ["EUR", "GBP", "AUD"]:
-                total_loss = total_loss_usd / conversion_rate_usd_to_account if conversion_rate_usd_to_account else total_loss_usd
-            elif account_currency in ["CAD", "CHF", "JPY"]:
-                total_loss = total_loss_usd * conversion_rate_usd_to_account
+            if s["risk_pct"] > s["allowed_risk_pct"]:
+                st.error("🚨 Risk too high for this configuration!")
+            elif s["risk_pct"] > s["allowed_risk_pct"] * 0.75:
+                st.warning("⚠️ Close to max risk for this configuration.")
             else:
-                total_loss = total_loss_usd
+                st.success("✅ Within safe risk level.")
+            st.markdown("---")
 
-            # Risk percentage
-            risk_pct = (total_loss / balance) * 100 if balance else 0
-            allowed_risk_pct = risk_percent(balance) * 100
+    # Filter and display Effective configurations
+    with col_effective:
+        st.markdown("#### Effective Distribution (Layered Trades)")
+        for s in [s for s in auto_suggestions if s['config_type'] == 'Effective']:
+            st.markdown(f"**{s['layers']} Layers (Effective)**")
+            st.caption(f"Trades: {s['trades_distribution']}")
+            st.write(f"- Total Trades: **{s['total_trades']}**")
+            st.write(f"- Max Loss: **{currency_symbol}{s['total_loss']:.2f}**")
+            st.write(f"- Risk: **{s['risk_pct']:.2f}%** (Allowed: {s['allowed_risk_pct']:.2f}%)")
 
-            suggestions.append({
-                "layers": layers,
-                "trades_distribution": trades_distribution,
-                "total_trades": sum(trades_distribution),
-                "total_loss": total_loss,
-                "risk_pct": risk_pct,
-                "allowed_risk_pct": allowed_risk_pct
-            })
+            if s["risk_pct"] > s["allowed_risk_pct"]:
+                st.error("🚨 Risk too high for this configuration!")
+            elif s["risk_pct"] > s["allowed_risk_pct"] * 0.75:
+                st.warning("⚠️ Close to max risk for this configuration.")
+            else:
+                st.success("✅ Within safe risk level.")
+            st.markdown("---")
 
-        return suggestions
-
-    # Generate suggestions
-    auto_suggestions = suggest_layers(auto_balance, lot_size_per_trade, pip_value, sl_distance_pips)
-
-    st.write("### Suggested Trade Configurations")
-    for s in auto_suggestions:
-        st.markdown(f"**{s['layers']} Layers** → {s['trades_distribution']}")
-        st.write(f"- Total Trades: {s['total_trades']}")
-        st.write(f"- Max Loss: {currency_symbol}{s['total_loss']:.2f}")
-        st.write(f"- Risk: {s['risk_pct']:.2f}% (Allowed: {s['allowed_risk_pct']:.2f}%)")
-
-        if s["risk_pct"] > s["allowed_risk_pct"]:
-            st.error("🚨 Risk too high!")
-        elif s["risk_pct"] > s["allowed_risk_pct"] * 0.75:
-            st.warning("⚠️ Close to max risk.")
-        else:
-            st.success("✅ Within safe risk level.")
-
-        st.markdown("---")
 
 with tab3:
     st.subheader("📈 Visual Risk Representation")
@@ -381,7 +398,7 @@ with tab3:
             'Risk per Layer (USD)': [loss_per_trade_per_layer_usd[i] * trades_per_layer_list[i] for i in range(num_layers)]
         })
         st.bar_chart(risk_chart_data.set_index('Layer'), use_container_width=True)
-        st.caption("Risk per Layer (in USD)")
+        st.caption("Risk per Layer (in USD) for your Custom Configuration")
     with col2:
         comparison_data = pd.DataFrame({
             'Metric': ['Margin Required', 'Maximum Risk (account currency)'],
